@@ -58,6 +58,28 @@ class DeepESN():
     for i in range(1,self.N):
       cu = self.ress[i].compute_state(cu)
     return np.array( list( np.copy(res.x) for res in self.ress ) ) # shape (N,Nr,1)
+    
+  def compute_output(self):
+  	x_c = np.vstack( list( self.ress[i].x for i in range( esn.N) ))
+  	return np.dot( self.Wout, x_c )
+  
+  def compute_output(self,u):
+  	x_c = self.compute_state(u).reshape(-1,1)
+  	return np.dot( self.Wout, x_c )
+  	
+  def train(self,train_x,train_y):
+    c_state = self.compute_state
+    s = np.array( list( map( c_state, train_x ) ) ) #shape ( len(data) , esn.N , esn.Nr , 1 )
+    s = s.reshape( np.size(train_x) , self.Nr*self.N )
+    d = train_y.reshape( np.size(train_y), self.Ny ) #shape(len(data),Nr)
+    self.Wout = np.transpose( np.dot( np.linalg.pinv(s) , d ) )
+    
+  def score(self, X, y, washout=True):
+    c_out = self.compute_output
+    out = np.array( list( map( c_out, X ) ) ) #shape (len(data),Ny,1)
+    out = out.reshape(np.size(X)) # solo output monodimensionale
+    wash_len = min(int(len(X)/3),500)
+    return np.mean( np.square( y[wash_len:] - out[wash_len:] ) ) 
   
   def reset_states(self):
     for res in self.ress:
@@ -80,3 +102,4 @@ def compute_weights(w,x,y,step):
   xt = x.reshape(1,-1)
   d = step * ( np.dot(y, xt ) - np.dot(m,w) )
   return d
+

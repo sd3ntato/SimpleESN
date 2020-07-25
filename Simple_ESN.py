@@ -50,14 +50,14 @@ class ESN():
     return np.dot( self.Wout, self.compute_state(u) )
 
   def train(self,train_x,train_y):
-    c_state = esn.compute_state
+    c_state = self.compute_state
     s = np.array( list( map( c_state, train_x ) ) ) # shape(len(data),Nr,1)
     s = s.reshape( np.size(train_x), self.Nr ) # shape(len(data),Nr)
     d = train_y.reshape( np.size(train_y), self.Ny ) #shape(len(data),Nr)
     self.Wout = np.transpose( np.dot( np.linalg.pinv(s) , d ) )
 
   def score(self, X, y, washout=True):
-    c_out = esn.compute_output
+    c_out = self.compute_output
     out = np.array( list( map( c_out, X ) ) ) #shape (len(data),Ny,1)
     out = out.reshape(np.size(X)) # solo output monodimensionale
     wash_len = min(int(len(X)/3),500)
