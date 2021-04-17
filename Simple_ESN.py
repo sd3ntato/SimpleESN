@@ -66,18 +66,18 @@ class ESN():
 ################################# ESP INDEX #################################
 
 def ESP_Index(esn,data,P,T):
-  esn.x = np.zeros( ( esn.Nr,1 ) ) # setto stato iniziale a 0
-  # orbita x0. shape( len(data), (esn.N*esn.Nr), 1), ovvero un vettore di vettori colonna, ognuno dei quali rappresenta l'i-esimo stato (come concatenzione stati reservoir)
-  s0 = np.array( list( esn.compute_state(d).reshape(-1,1) for d in data ) )  
-  D = np.zeros( P ) # inizializzo vettore D
+  esn.x = np.zeros( ( esn.Nr,1 ) )
+  c_state= esn.compute_state # funzione che calcola lo stato della rete
+  s0 = np.array( list( map( c_state, data ) ) ) # orbita x0
+  D = np.zeros( P )
   for i in range( P ):
-    esn.x = np.random.rand( esn.Nr, 1 ) # setto stato iniziale a vettore randomico
-    si = np.array( list( esn.compute_state(d).reshape(-1,1) for d in data ) ) # orbita xi.
-    d = np.zeros( np.size(data,axis=0) - T ) # per contenere distanze euclidee tra stati al t-esimo passo
+    esn.x = np.random.rand( esn.Nr, 1 )
+    si = np.array( list( map( c_state, data ) ) ) # orbita xi
+    d = np.zeros( np.size(data,axis=0) - T )
     for t in range( T, np.size(data,axis=0) ):
-      d[t-T] = np.linalg.norm( s0[t] - si[t] ) # d[t] contiene distanza tra stati al t-esimo passo, calcolati da stati iniziali diversi
-    D[i] = np.mean( d ) # media distanze stati per due stati iniziali diversi
-  return np.mean( D ) # a grandi linee media distanze stati per tanti stati iniziali diversi
+      d[t-T] = np.linalg.norm( s0[t] - si[t] )
+    D[i] = np.mean( d )
+  return np.mean( D )
 
 
 ################################# DIMENSIONE SPAZIO STATI #################################
