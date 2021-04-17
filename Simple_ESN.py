@@ -1,3 +1,8 @@
+import numpy as np
+from scipy.stats import uniform
+import scipy.sparse as s
+
+
 class ESN():
   # VETTORI STATO E INPUT COLONNA
   def __init__(self, rho =0.9, Nr=100, Nu=1, r_density =0.2, i_density =0.1, Ny=1):
