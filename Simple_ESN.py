@@ -3,14 +3,19 @@ from scipy.stats import uniform
 import scipy.sparse as s
 
 
+import numpy as np
+from scipy.stats import uniform
+import scipy.sparse as s
+
+
 class ESN():
   # VETTORI STATO E INPUT COLONNA
-  def __init__(self, rho =0.9, Nr=100, Nu=1, r_density =0.2, i_density =0.1):
+  def __init__(self, rho =0.9, Nr=100, Nu=1, r_density =0.2, i_density =0.1, Ny=1):
     #iperparametri rete
     self.rho = rho
     self.Nr = Nr
     self.Nu = Nu
-    self.Ny = 1
+    self.Ny = Ny
     self.r_density = r_density
     self.i_density = i_density
 
@@ -49,11 +54,13 @@ class ESN():
   def compute_output(self,u):
     return np.dot( self.Wout, self.compute_state(u) )
 
-  def train(self,train_x,train_y):
+  def train(self,train_x,train_y,wash_seq):
+    for d in wash_seq:
+      self.compute_state(d) # washout
     c_state = self.compute_state
     s = np.array( list( map( c_state, train_x ) ) ) # shape(len(data),Nr,1)
     s = s.reshape( np.size(train_x), self.Nr ) # shape(len(data),Nr)
-    d = train_y.reshape( np.size(train_y), self.Ny ) #shape(len(data),Nr)
+    d = train_y.T #shape(len(data),Ny)
     self.Wout = np.transpose( np.dot( np.linalg.pinv(s) , d ) )
 
   def score(self, X, y, washout=True):
@@ -61,11 +68,11 @@ class ESN():
     out = np.array( list( map( c_out, X ) ) ) #shape (len(data),Ny,1)
     out = out.reshape(np.size(X)) # solo output monodimensionale
     wash_len = min(int(len(X)/3),500)
-    return np.mean( np.square( y[wash_len:] - out[wash_len:] ) ) 
+    return np.mean( np.square( y[wash_len:] - out[wash_len:] ) )
 
-
+################################# DIMENSIONE SPAZIO STATI #################################
 #calcola dimensione spazio stati 
-def compute_dim_state_space(esn,data):
+def DSS(esn,data):
   esn.x=np.zeros((esn.Nr,1)) # resetto lo stato iniziale della rete
   c_state= esn.compute_state # funzione che calcola lo stato della rete
   l = np.array( list( map( c_state, data ) ) ) # ogni elemento della lista contiene lo stato della rete al tempo t, t=1:len(data)
@@ -74,6 +81,24 @@ def compute_dim_state_space(esn,data):
   eigs= np.linalg.eigvalsh(cov_m)  # funzione specifica per calcolo autovalori matrici simmetriche, numericamente stabile
   dim = np.sum(eigs)**2/np.sum(np.square(eigs)) # calcolo dimensione effettiva spazio degli stati, come indicato in paper
   return dim
+
+################################# CAPACITA DI MEMORIA #################################
+
+def MC(esn,data):
+  for d in data[:1000]:
+    esn.compute_state(d) # washout
+
+  c_out = esn.compute_output # funzione che calcola output
+  m = np.array( list( map(c_out,data[1000:]) ) ).reshape(1000,esn.Ny) # matrice degli yk: uno per colonna
+
+  v1 = np.var(data[1000-2*esn.Ny:])
+  MC =(np.cov(m[:,0] , data[1000:])[0,0])**2 / (v1 * np.var(m[:,0])) + sum( (np.cov( m[:,k] , data[1000-k:-k])[0,0])**2 / ( v1 * np.var(m[:,k])) for k in range(1,esn.Ny) )
+  return MC
+
+
+###################################################################################################
+################################# ALLENAMENTO HEBBIANO ###########################################
+###################################################################################################
 
 # calcola modifiche da effettuare a matrice dei pesi w
 # x: preattivazione (nel caso di Win input), y: relativa attivazione
@@ -108,5 +133,6 @@ def train_both(esn,train_seq,steps):
     act = esn.compute_state(el)
     esn.W_in += np.multiply(compute_weights(esn.W_in,pin,act,in_step) , esn.D_in )
     esn.W += np.multiply( compute_weights(esn.W,preact,act,rec_step) , esn.D ) 
+
     
 
