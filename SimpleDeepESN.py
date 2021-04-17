@@ -70,7 +70,7 @@ class DeepESN():
   	x_c = self.compute_state(u)[i]
   	return np.dot( self.ress[i].Wout, x_c )
   
-  #allenamento readout tutta la rete
+  # allenamento readout tutta la rete
   def train(self,train_x,train_y,wash_seq):
     for d in wash_seq:
       self.compute_state(d) # washout
@@ -80,7 +80,7 @@ class DeepESN():
     d = train_y.T #shape(len(data),Nr)
     self.Wout = np.transpose( np.dot( np.linalg.pinv(s) , d ) )
 
-  #allenamento i-esimo readout
+  # allenamento i-esimo readout
   def train(self,train_x,train_y,wash_seq,i): # allena il readout dell'i-esimo reservoir
     for d in wash_seq:
       self.compute_state(d) # washout
@@ -102,7 +102,8 @@ class DeepESN():
 
 
 ################################# DIMENSIONE SPAZIO STATI #################################
-def DSS(esn,data): # ritorna vettore con le dimensioni di ogni reservoir
+# calcolo dimensioni spazio stati di ogni reservoir, le mette in un vettore e ritorna quel vettore
+def DSS(esn,data): 
   esn.reset_states()
   c_state = esn.compute_state
   l = np.array( list( map( c_state, data ) ) ) #shape ( len(data) , esn.N , esn.Nr , 1 )
@@ -114,15 +115,38 @@ def DSS(esn,data): # ritorna vettore con le dimensioni di ogni reservoir
     dims[i] = np.sum(eigs)**2/np.sum(np.square(eigs)) 
   return dims
 
+# calcola dimensione spazio stati di un reservoir
+def DSSi(esn,data,i):  
+  esn.reset_states()
+  l = np.array( list( esn.compute_state(d)[i] for d in data ) ) #shape ( len(data) , esn.Nr , 1 )
+  m = l.reshape(np.size(data,axis=0) , esn.Nr).T
+  cov_m = np.cov(m) 
+  eigs = np.linalg.eigvalsh(cov_m)  
+  dim = np.sum(eigs)**2/np.sum(np.square(eigs))
+  return dim
+
+# dimensione spazio stati globale. Si usa concatenazione stati di ogni reservoir
+def glob_DSS(esn,data):  
+  esn.reset_states()
+  c_state = esn.compute_state
+  l = np.array( list( map( c_state, data ) ) ) #shape ( len(data) , esn.N , esn.Nr , 1 )
+  m = l.reshape( np.size(data) , esn.Nr*esn.N ).T
+  cov_m = np.cov( m )
+  eigs= np.linalg.eigvalsh( cov_m )
+  dim = np.sum( eigs )**2 / np.sum( np.square( eigs ) ) 
+  return dim
+
 
 ################################# CAPACITA DI MEMORIA #################################
-def train(self,train_x,train_y,i): # allena il readout dell'i-esimo reservoir
+# allena il readout dell'i-esimo reservoir
+def train(self,train_x,train_y,i): 
   s = np.array( list( esn.compute_state(d)[i] for d in train_x ) ) #shape ( len(data) , esn.N , esn.Nr , 1 )
   s = s.reshape( np.size(train_x) , self.Nr )
   d = train_y.T #shape(len(data),Nr)
   self.ress[i].Wout = np.transpose( np.dot( np.linalg.pinv(s) , d ) )
 
-def MC(esn,i,data): # calcola MC dell'i-esimo reservoir
+# capacita di memoria i-esimo reservoir
+def MCi(esn,i,data):
   for d in data[:1000]:
     esn.compute_state(d) # washout
 
@@ -132,6 +156,18 @@ def MC(esn,i,data): # calcola MC dell'i-esimo reservoir
   MC =(np.cov(m[:,0] , data[1000:])[0,0])**2 / (v1 * np.var(m[:,0])) + sum( (np.cov( m[:,k] , data[1000-k:-k])[0,0])**2 / ( v1 * np.var(m[:,k])) for k in range(1,esn.Ny) )
 
   if MC > 100 : MC=0
+  return MC
+
+# capacita' di memoria globale, si usa concatenazione degli stati dei reservoir
+def glob_MC(esn,data):
+  for d in data[:1000]:
+    esn.compute_state(d) # washout
+
+  m = np.array( list( esn.compute_output(d) for d in data[1000:]) ).reshape(1000,esn.Ny) # matrice degli yk: uno per colonna
+
+  v1 = np.var(data[1000-esn.Ny:])
+  MC =(np.cov(m[:,0] , data[1000:])[0,0])**2 / (v1 * np.var(m[:,0])) + sum( (np.cov( m[:,k] , data[1000-k:-k])[0,0])**2 / ( v1 * np.var(m[:,k])) for k in range(1,esn.Ny) )
+  if MC>100:MC=0
   return MC
 
 
@@ -203,4 +239,22 @@ def train_rec(esn,i,train_seq,rec_step):
       preact = res.x # invece la preattivazione per matrice ricorrente e' lo stato di questo reservoir al tempo t.
       act = res.compute_state(el) # in questo caso non ho bisogno di far passare il flusso per tutta la rete!
       W += np.multiply( compute_weights( W , preact , act , rec_step ) , D ) 
+
+################################# ALLENAMENTO TUTTI I RESERVOIR CONTEMPORANEAMENTE #################################
+
+def glob_train_both(esn,train_seq,steps):
+  esn.reset_states()
+  in_step = steps[0]
+  rec_step = steps[1]
+  pins=[None]*esn.N; precs=[None]*esn.N; 
+  
+  for el in train_seq:
+    pins[0] = np.vstack((el,1)) # per quanto riguarda il primo reservoir la preattivazione consiste nell'input corrente
+    pins[1:] = list( np.vstack((esn.ress[i-1].x , 1)) for i in range(1,esn.N) ) # invece la preattivazione per matrice ricorrente e' lo stato di questo reservoir al tempo t.
+    precs[:] = list( np.copy(esn.ress[i].x) for i in range(esn.N) )
+    acts = esn.compute_state(el) 
+    for i in range( np.size(esn.ress) ):
+      esn.ress[i].W_in += np.multiply( compute_weights( esn.ress[i].W_in, pins[i] , acts[i] , in_step) , esn.ress[i].D_in )
+      esn.ress[i].W += np.multiply( compute_weights( esn.ress[i].W , precs[i] , acts[i] , rec_step ) , esn.ress[i].D ) 
+ 
 

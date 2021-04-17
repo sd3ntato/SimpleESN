@@ -1,13 +1,3 @@
-import numpy as np
-from scipy.stats import uniform
-import scipy.sparse as s
-
-
-import numpy as np
-from scipy.stats import uniform
-import scipy.sparse as s
-
-
 class ESN():
   # VETTORI STATO E INPUT COLONNA
   def __init__(self, rho =0.9, Nr=100, Nu=1, r_density =0.2, i_density =0.1, Ny=1):
@@ -28,13 +18,11 @@ class ESN():
     self.D_in = np.zeros(self.W_in.shape); self.D_in[:,:] = self.W_in[:,:] != 0 
 
     self.x = np.zeros((Nr,1)) # stato corrente
-  # end ESN.__init__
 
   def build_recurrent_matrix(self):
     wrandom = s.random(self.Nr,self.Nr,density = self.r_density, data_rvs=uniform(loc=-1,scale=2).rvs ).todense() # matrice sparsa con valori in distribuzione uniforme tra -1 e 1
     w = wrandom * ( self.rho / max(np.abs(np.linalg.eigvals(wrandom))) )
     return np.array(w)
-  # end ESN.build_recurrent_matrix
 
   def build_input_matrix(self):
     w_in = s.random( self.Nr , self.Nu+1 , density = self.i_density , data_rvs=uniform(loc=-1,scale=2).rvs ).todense() # matrice sparsa con valori in distribuzione uniforme tra -1 e 1
@@ -68,10 +56,11 @@ class ESN():
     out = np.array( list( map( c_out, X ) ) ) #shape (len(data),Ny,1)
     out = out.reshape(np.size(X)) # solo output monodimensionale
     wash_len = min(int(len(X)/3),500)
-    return np.mean( np.square( y[wash_len:] - out[wash_len:] ) )
+    return np.mean( np.square( y[wash_len:] - out[wash_len:] ) ) 
+
 
 ################################# DIMENSIONE SPAZIO STATI #################################
-#calcola dimensione spazio stati 
+# calcola dimensione spazio stati 
 def DSS(esn,data):
   esn.x=np.zeros((esn.Nr,1)) # resetto lo stato iniziale della rete
   c_state= esn.compute_state # funzione che calcola lo stato della rete
@@ -84,6 +73,7 @@ def DSS(esn,data):
 
 ################################# CAPACITA DI MEMORIA #################################
 
+# calcolo capacita' di memoria .
 def MC(esn,data):
   for d in data[:1000]:
     esn.compute_state(d) # washout
@@ -124,6 +114,8 @@ def train_rec(esn,train_seq,step):
     act = esn.compute_state(el)
     esn.W += np.multiply( compute_weights(esn.W,preact,act,step) , esn.D ) 
 
+# esegue epoca di apprendimento hebbiano su entrambe le matrici contemporaneamente. Mantiene densita' matrici allenate
+# esn: rete da allenare, train_seq: dati per allenamento, stepa: learning rates [in_step, rec_step]
 def train_both(esn,train_seq,steps):
   in_step = steps[0]
   rec_step = steps[1]
