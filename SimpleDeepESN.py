@@ -58,17 +58,17 @@ class DeepESN():
       cu = self.ress[i].compute_state(cu)
     return np.array( list( np.copy(res.x) for res in self.ress ) ) # shape (N,Nr,1)
     
-  def compute_output(self):
-  	x_c = np.vstack( list( self.ress[i].x for i in range( self.N) ))
-  	return np.dot( self.Wout, x_c )
+  def compute_output(self): 
+    x_c = np.vstack( list( self.ress[i].x for i in range( self.N) ))
+    return np.dot( self.Wout, x_c )
   
-  def compute_output(self,u):
-  	x_c = self.compute_state(u).reshape(-1,1)
-  	return np.dot( self.Wout, x_c )
+  def compute_output(self,u): 
+    x_c = self.compute_state(u).reshape(-1,1)
+    return np.dot( self.Wout, x_c )
   	
   def compute_output_i(self,u,i):
-  	x_c = self.compute_state(u)[i]
-  	return np.dot( self.ress[i].Wout, x_c )
+    x_c = self.compute_state(u)[i]
+    return np.dot( self.ress[i].Wout, x_c )
   
   # allenamento readout tutta la rete
   def train(self,train_x,train_y,wash_seq):
@@ -157,7 +157,7 @@ def glob_DSS(esn,data):
 ################################# CAPACITA DI MEMORIA #################################
 # allena il readout dell'i-esimo reservoir
 def train(self,train_x,train_y,i): 
-  s = np.array( list( esn.compute_state(d)[i] for d in train_x ) ) #shape ( len(data) , esn.N , esn.Nr , 1 )
+  s = np.array( list( self.compute_state(d)[i] for d in train_x ) ) #shape ( len(data) , esn.N , esn.Nr , 1 )
   s = s.reshape( np.size(train_x) , self.Nr )
   d = train_y.T #shape(len(data),Nr)
   self.ress[i].Wout = np.transpose( np.dot( np.linalg.pinv(s) , d ) )
