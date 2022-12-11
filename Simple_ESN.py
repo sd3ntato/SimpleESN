@@ -149,3 +149,78 @@ def train_both(esn,train_seq,steps):
 
     
 
+###################################################################################################
+################################# ESPERIMENTI  ###########################################
+###################################################################################################
+from IPython.display import clear_output
+import matplotlib.pyplot as plt
+import pandas as pd
+from datetime import datetime
+
+def eval_shallow_one(train_data, test_data, tresh=0.0001 , max_epochs = 1000 , step=1e-05 , train_fun=train_input , r_density=0.2 , i_density=0.1 , Nr=100, Nu=1 , mesure_interval=50, rho=0.9):
+  test_MCs = [] ; train_MCs = [] 
+  train_dims = [] ; test_dims = []
+  rhos = []
+
+  esn = ESN( Nu=Nu, Nr=Nr, Ny=2*Nr , rho=rho , r_density=r_density , i_density=i_density )
+  # rhos = np.array( max(np.abs(np.linalg.eigvals(esn.W))) )
+
+  train_x = train_data[1000:5000]
+  train_y = np.vstack( list( train_data[1000-k:5000-k] for k in range(esn.Ny) ) )
+
+  esn.train(train_x, train_y, train_data[:1000])
+
+  test_MCs.append( MC(esn,test_data) ) ; train_MCs.append( MC(esn,train_data[:2000]) )
+  train_dims.append( DSS(esn,train_data) ) ; test_dims.append( DSS(esn,test_data) )
+  rhos.append( max(np.abs(np.linalg.eigvals(esn.W))) ) 
+
+  for epoch in range(max_epochs):
+
+    train_fun(esn,train_data,step) 
+
+    if epoch % mesure_interval == 0:
+      clear_output(wait=True)
+      esn.train(train_x,train_y,train_data[:1000]) 
+
+      test_MCs.append( MC(esn,test_data) ) ; train_MCs.append( MC(esn,train_data[:2000]) )
+      train_dims.append( DSS(esn,train_data) ) ; test_dims.append( DSS(esn,test_data) )
+      rhos.append( max(np.abs(np.linalg.eigvals(esn.W))) ) 
+      print('epoch: ',epoch)
+      
+    # end if
+
+  # end for
+  
+  
+  # save results
+  title=''
+  now = datetime.now()
+  if type(step) == list:
+    title = f'max_epochs_{max_epochs}_{step[0]}_{step[1]}_rdensity_{r_density}_idensity_{i_density}_Nr_{Nr}_Nu_{Nu}_mesInterval_{mesure_interval}_init_rho_{rho}_{now.strftime("%-d-%b-%H:%M:%S")}'
+  else:
+    string_train_fun = f'{train_fun}'.split(' ')[1]
+    title = f'max_epochs_{max_epochs}_{step}_{string_train_fun}_rdensity_{r_density}_idensity_{i_density}_Nr_{Nr}_Nu_{Nu}_mesInterval_{mesure_interval}_init_rho_{rho}_{now.strftime("%-d-%b-%H:%M:%S")}'
+  
+  pd.DataFrame.from_dict({
+      'train_MCs':test_MCs,
+      'test_MCs':train_MCs,
+      'train_dims':test_dims,
+      'test_dims':train_dims,
+      'rhos':rhos
+  }).to_csv(title)
+
+  fig, (ax1, ax2, ax3) = plt.subplots(3, figsize=(7,9))
+  ax1.set_ylabel('MC') ; ax1.set_xlabel('epoche x ' + str(mesure_interval)) ; ax1.title.set_text('Memory capacity'); 
+  ax2.set_ylabel('DSS') ; ax2.set_xlabel('epoche x ' + str(mesure_interval)) ; ax2.title.set_text('Dimensione spazio stati')
+  ax1.plot(train_MCs,'b');ax1.plot(test_MCs,'r') ; ax1.legend(['MC train', 'MC val'], loc=4)
+  ax2.plot(train_dims,'b');ax2.plot(test_dims,'r') ; ax2.legend(['dim train', 'dim val'], loc=4)
+  ax3.set_ylabel('rho') ; ax3.title.set_text('raggio spettrale primo reservoir')
+  ax3.plot( rhos,'-r')
+  fig.tight_layout()
+
+  print("step: ",step,' mesure_interval: ',mesure_interval, ' stop-treshold: ',tresh, '\n'  )
+  print("r_density: ",esn.r_density, 'i_density:',esn.i_density, ' Nr: ',esn.Nr, ' rho: ',esn.rho, '\n'  )
+  print("norma pesi in alla fine: ", np.linalg.norm(esn.W_in))
+  print("norma pesi rec alla fine: ", np.linalg.norm(esn.W))
+  print("raggio spettrale matrice ricorrente alla fine: ",max(np.abs(np.linalg.eigvals(esn.W))) ,'\n' )
+
