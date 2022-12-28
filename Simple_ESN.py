@@ -96,11 +96,11 @@ def DSS(esn,data):
 
 # calcolo capacita' di memoria .
 def MC(esn,data):
-  for d in data[:1000]:
-    esn.compute_state(d) # washout
+  c_state = esn.compute_state # funzione che calcola output
+  list( map( c_state, data[:1000] ) )
 
-  c_out = esn.compute_output # funzione che calcola output
-  m = np.array( list( map(c_out,data[1000:]) ) ).reshape(1000,esn.Ny) # matrice degli yk: uno per colonna
+  m1 = np.hstack( list( map(c_state,data[1000:]) ) )
+  m = np.dot( esn.Wout, m1).T
 
   v1 = np.var(data[1000-2*esn.Ny:])
   MC =(np.cov(m[:,0] , data[1000:])[0,0])**2 / (v1 * np.var(m[:,0])) + sum( (np.cov( m[:,k] , data[1000-k:-k])[0,0])**2 / ( v1 * np.var(m[:,k])) for k in range(1,esn.Ny) )
