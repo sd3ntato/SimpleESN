@@ -19,11 +19,12 @@ def plot_given_conditions(what, conditions, ax, filenames, lim=None):
 
   try:
     means = np.mean(for_the_mean,axis=0)
+    variances = np.var(for_the_mean, axis=0)
     ax.plot( means )
     ax.set_title( conditions[0] )
     ax.set_ylim(lim)
     print( for_the_mean.shape )
-    return means, for_the_mean.shape[0]
+    return means, variances, for_the_mean.shape[0]
   except:
     print(f'warning: this thing is like this: {for_the_mean}')
     return None
@@ -45,16 +46,20 @@ def visualize( what='MC', i_densities=[ '0.2', '0.5', '0.8', '1'],   train_fun='
   fig.tight_layout(h_pad=3.5)
 
   means = {}
+  variances = {}
   n_samples = {}
 
   for i, el in enumerate(i_densities):
     conditions = [ f'idensity_{el}', train_fun, f'rdensity_{r_density}', f'max_epochs_{max_epochs}', f'{lr}' ]
     if (res:= plot_given_conditions(what, conditions, axs[ i//2 , i%2 ], filenames, lim=lim )) is  not None: 
-      means[el], n_samples[el] = res
+      means[el], variances[el], n_samples[el] = res
 
-  def compute_stats(means):
-    return means[0], means[np.argmax(means)], np.argmax(means), (means[ np.argmax(means) ] - means[0] ) / means[0] * 100
+  def compute_stats(means, variances):
+    return f"{ np.round( means[0], 2) }±{ np.round( np.sqrt( variances[0]), 2) }", \
+           f"{ np.round(means[np.argmax(means)], 2 ) }±{ np.round( np.sqrt( variances[np.argmax(means)]), 2) }  ", \
+               np.argmax(means), \
+           f"{ np.round((means[ np.argmax(means) ] - means[0] ) / means[0] * 100 , 2)} "
 
-  df = pd.DataFrame( np.vstack( [ np.hstack( ( compute_stats( means[el] ), n_samples[el] ) ) if el in means else [math.nan]*5  for el in i_densities ] ), index=i_densities, columns=[f'init_{what}', f'final_{what}', 'idx_max', 'IPM', 'n_samples'] ) 
+  df = pd.DataFrame( np.vstack( [ np.hstack( ( compute_stats( means[el], variances[el] ), n_samples[el] ) ) if el in means else [math.nan]*5  for el in i_densities ] ), index=i_densities, columns=[f'init_{what}', f'final_{what}', 'idx_max', 'IPM', 'n_samples'] ) 
   
   return df
