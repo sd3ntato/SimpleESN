@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.stats import uniform
 import scipy.sparse as s
-
+import pickle
 
 class ESN():
   # VETTORI STATO E INPUT COLONNA
@@ -161,9 +161,10 @@ def eval_shallow_one(train_data, test_data, tresh=0.0001 , max_epochs = 1000 , s
   test_MCs = [] ; train_MCs = [] 
   train_dims = [] ; test_dims = []
   rhos = []
+  best_W, best_W_in = None, None
+  best_MC = 0
 
   esn = ESN( Nu=Nu, Nr=Nr, Ny=2*Nr , rho=rho , r_density=r_density , i_density=i_density )
-  # rhos = np.array( max(np.abs(np.linalg.eigvals(esn.W))) )
 
   train_x = train_data[1000:5000]
   train_y = np.vstack( list( train_data[1000-k:5000-k] for k in range(esn.Ny) ) )
@@ -182,9 +183,14 @@ def eval_shallow_one(train_data, test_data, tresh=0.0001 , max_epochs = 1000 , s
       clear_output(wait=True)
       esn.train(train_x,train_y,train_data[:1000]) 
 
-      test_MCs.append( MC(esn,test_data) ) ; train_MCs.append( MC(esn,train_data[:2000]) )
+      test_MC = MC(esn,test_data)
+      test_MCs.append( test_MC ) ; train_MCs.append( MC(esn,train_data[:2000]) )
       train_dims.append( DSS(esn,train_data) ) ; test_dims.append( DSS(esn,test_data) )
       rhos.append( max(np.abs(np.linalg.eigvals(esn.W))) ) 
+      
+      if test_MC > best_MC:
+        best_W, best_W_in = esn.W, esn.W_in
+      
       print('epoch: ',epoch)
       
     # end if
@@ -208,6 +214,11 @@ def eval_shallow_one(train_data, test_data, tresh=0.0001 , max_epochs = 1000 , s
       'test_dims':train_dims,
       'rhos':rhos
   }).to_csv(title)
+  
+  # save matrices
+  dict = { 'W': best_W, 'W_in': best_W_in }
+  with open(f'models/{title}.pickle', 'wb') as handle:
+    pickle.dump(dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
   fig, (ax1, ax2, ax3) = plt.subplots(3, figsize=(7,9))
   ax1.set_ylabel('MC') ; ax1.set_xlabel('epoche x ' + str(mesure_interval)) ; ax1.title.set_text('Memory capacity'); 
