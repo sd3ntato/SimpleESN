@@ -1,6 +1,10 @@
+import pickle
 import numpy as np
-from scipy.stats import uniform
 import scipy.sparse as s
+from datetime import datetime
+import matplotlib.pyplot as plt
+from scipy.stats import uniform
+from IPython.display import display, clear_output
 
 class Reservoir():
   def __init__(self, rho=0.9 , Nu=10, Nr=10,r_density=0.5, i_density=1):
@@ -142,6 +146,18 @@ def DSSi(esn,data,i):
   dim = np.sum(eigs)**2/np.sum(np.square(eigs))
   return dim
 
+def DSSi_all(esn,data):  
+  dims = np.zeros(esn.N)
+  esn.reset_states()
+  c_state = esn.compute_state
+  l = np.array( list( map( c_state, data ) ) ) #shape ( len(data) , esn.N , esn.Nr , 1 )
+  for j in range( esn.N ):
+    m_j = l[:,j,:,:].reshape( np.size(data) , esn.Nr ).T # matrice degli stati assunti dall'i-esimo reservoir
+    cov_m=np.cov(m_j)
+    eigs= np.linalg.eigvalsh(cov_m)
+    dims[j] = np.sum(eigs)**2/np.sum(np.square(eigs)) 
+  return dims
+
 # dimensione spazio stati globale. Si usa concatenazione stati di ogni reservoir
 def glob_DSS(esn,data):  
   esn.reset_states()
@@ -275,3 +291,90 @@ def glob_train_both(esn,train_seq,steps):
       esn.ress[i].W += np.multiply( compute_weights( esn.ress[i].W , precs[i] , acts[i] , rec_step ) , esn.ress[i].D ) 
  
 
+################################# ALLENAMENTO UN RESERVOIR ALLA VOLTA #################################
+
+def eval_one_reservoir_at_a_time(train_data, test_data, N = 5, Nr=100, Nu=1, rho=0.9, r_density=0.1, i_density=1, max_epochs=10, step=-2e-05 , train_fun=train_rec, mesure_interval=1):
+  train_x = train_data[1000:5000]
+  train_y = np.vstack( list( train_data[1000-k:5000-k] for k in range(200) ) )
+
+  esn = DeepESN( N=N, Nr=Nr, Ny=2*Nr , rho=rho , r_density=r_density , i_density=i_density )
+
+  for i in range(esn.N):
+    for d in train_data[:1000]:
+      esn.compute_state(d) # washout
+    train(esn,train_x,train_y,i)  #alleno i-esimo readout
+
+  test_dims = np.array( DSSi_all(esn,test_data ) )
+  test_MCs = np.array( list( MCi(esn,i,test_data ) for i in range(esn.N) ) )
+
+  train_dims = np.array( DSSi_all(esn,train_data ) )
+  train_MCs = np.array( list( MCi(esn,i,train_data[:2000] ) for i in range(esn.N) ) )
+
+  rhos = np.array( max(np.abs(np.linalg.eigvals(esn.ress[0].W))) )
+
+  print(test_MCs)
+
+  for i in range( 1 ):
+    
+    print('res:', i )
+    for epch in range(max_epochs):
+      print(epch,rhos)
+      train_fun(esn,i,train_data,step)
+      
+      for j in range(esn.N):
+        for d in train_data[:1000]:
+          esn.compute_state(d) # washout
+        train(esn,train_x,train_y,j)  
+
+      test_MCs = np.vstack( ( test_MCs, np.array( list( MCi(esn,i,test_data ) for i in range(esn.N) ) ) ) )
+      test_dims = np.vstack( ( test_dims, DSSi_all(esn,test_data) ) )
+
+      train_MCs = np.vstack( ( train_MCs, np.array( list( MCi(esn,i,train_data[:2000] ) for i in range(esn.N) ) ) ) )
+      train_dims = np.vstack( ( train_dims, DSSi_all(esn,train_data) ) )
+
+      rhos = np.vstack( ( rhos, max(np.abs(np.linalg.eigvals(esn.ress[0].W))) ) )
+
+    clear_output()
+
+  data = {
+    'test_MCs': test_MCs,
+    'train_MCs': train_MCs,
+    'test_dims': test_dims,
+    'train_dims': train_dims,
+  }
+  title=''
+  now = datetime.now()
+  if type(step) == list:
+    title = f'deep_one_at_time_max_epochs_{max_epochs}_{step[0]}_{step[1]}_rdensity_{r_density}_idensity_{i_density}_Nr_{Nr}_Nu_{Nu}_mesInterval_{mesure_interval}_init_rho_{rho}_{now.strftime("%-d-%b-%H:%M:%S")}'
+  else:
+    string_train_fun = f'{train_fun}'.split(' ')[1]
+    title = f'deep_one_at_time_max_epochs_{max_epochs}_{step}_{string_train_fun}_rdensity_{r_density}_idensity_{i_density}_Nr_{Nr}_Nu_{Nu}_mesInterval_{mesure_interval}_init_rho_{rho}_{now.strftime("%-d-%b-%H:%M:%S")}'
+  with open(f'results_deep/{title}.pickle', 'wb') as handle:
+    pickle.dump(dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+  fig, (ax1, ax2, ax3) = plt.subplots(3, figsize=(10,9))
+
+  ax1.set_ylabel('MC') ; ax1.title.set_text('Memory capacity'); 
+  ax2.set_ylabel('DSS') ; ax2.title.set_text('Dimensione spazio stati')
+  ax3.set_ylabel('rho') ; ax3.title.set_text('raggio spettrale primo reservoir')
+
+  ax1.plot(test_MCs[:,0],'-r') ;ax1.plot(test_MCs[:,1],'-c') ;ax1.plot(test_MCs[:,2],'-m') 
+  ax1.plot(test_MCs[:,3],'-y') ;ax1.plot(test_MCs[:,4],'-b') 
+
+  ax1.plot(train_MCs[:,0],'--r') ;ax1.plot(train_MCs[:,1],'--c') ;ax1.plot(train_MCs[:,2],'--m') 
+  ax1.plot(train_MCs[:,3],'--y') ;ax1.plot(train_MCs[:,4],'--b') 
+
+  ax1.legend(['reservoir 1 validation','reservoir 2 validation','reservoir 3 validation','reservoir 4 validation','reservoir 5 validation','reservoir 1 train','reservoir 2 train','reservoir 3 train','reservoir 4 train','reservoir 5 train',],loc='center left', bbox_to_anchor=(1, 0.5))
+
+  ax2.plot(test_dims[:,0],'-r') ;ax2.plot(test_dims[:,1],'-c') ;ax2.plot(test_dims[:,2],'-m') ;
+  ax2.plot(test_dims[:,3],'-y') ;ax2.plot(test_dims[:,4],'-b') 
+
+  ax2.plot(train_dims[:,0],'--r') ;ax2.plot(train_dims[:,1],'--c') ;ax2.plot(train_dims[:,2],'--m') ;
+  ax2.plot(train_dims[:,3],'--y') ;ax2.plot(train_dims[:,4],'--b') 
+
+  ax2.legend(['reservoir 1 validation','reservoir 2 validation','reservoir 3 validation','reservoir 4 validation','reservoir 5 validation', 'reservoir 1 train','reservoir 2 train','reservoir 3 train','reservoir 4 train','reservoir 5 train',],loc='center left', bbox_to_anchor=(1, 0.5))
+
+  ax3.plot( rhos[:,0],'-r')
+
+
+  fig.tight_layout()
