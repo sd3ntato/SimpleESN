@@ -12,3 +12,5 @@ synthetic_control/*
 UCR_TS_Archive_2015/*
 esperimenti shallow/.DS_Store
 .DS_Store
+*.pickle
+*.ipynb

@@ -1,3 +1,4 @@
+import os
 import pickle
 import numpy as np
 import scipy.sparse as s
@@ -311,6 +312,9 @@ def eval_one_reservoir_at_a_time(train_data, test_data, N = 5, Nr=100, Nu=1, rho
   train_MCs = np.array( list( MCi(esn,i,train_data[:2000] ) for i in range(esn.N) ) )
 
   rhos = np.array( max(np.abs(np.linalg.eigvals(esn.ress[0].W))) )
+  
+  best_Ws, best_W_ins = [None]*esn.N, [None]*esn.N
+  best_MCs = [0]*esn.N
 
   print(test_MCs)
 
@@ -318,24 +322,42 @@ def eval_one_reservoir_at_a_time(train_data, test_data, N = 5, Nr=100, Nu=1, rho
     
     print('res:', i )
     for epch in range(max_epochs):
-      print(epch,rhos)
+      clear_output(wait=True)
+      print(epch)
       train_fun(esn,i,train_data,step)
+      print('hebb train done')
       
-      for j in range(esn.N):
-        for d in train_data[:1000]:
-          esn.compute_state(d) # washout
-        train(esn,train_x,train_y,j)  
+      if epch % mesure_interval == 0:
+        
+        # train a readout for each resevoir
+        for j in range(esn.N):
+          for d in train_data[:1000]:
+            esn.compute_state(d) # washout
+          train(esn,train_x,train_y,j)  
+        print('readout train done')
 
-      test_MCs = np.vstack( ( test_MCs, np.array( list( MCi(esn,i,test_data ) for i in range(esn.N) ) ) ) )
-      test_dims = np.vstack( ( test_dims, DSSi_all(esn,test_data) ) )
+        new_MCs = np.array( list( MCi(esn,i,test_data ) for i in range(esn.N) ) ) 
+        test_MCs = np.vstack( ( test_MCs, new_MCs ) )
+        test_dims = np.vstack( ( test_dims, DSSi_all(esn,test_data) ) )
+        print('res test done')
 
-      train_MCs = np.vstack( ( train_MCs, np.array( list( MCi(esn,i,train_data[:2000] ) for i in range(esn.N) ) ) ) )
-      train_dims = np.vstack( ( train_dims, DSSi_all(esn,train_data) ) )
+        train_MCs = np.vstack( ( train_MCs, np.array( list( MCi(esn,i,train_data[:2000] ) for i in range(esn.N) ) ) ) )
+        train_dims = np.vstack( ( train_dims, DSSi_all(esn,train_data) ) )
+        print('res train done')
 
-      rhos = np.vstack( ( rhos, max(np.abs(np.linalg.eigvals(esn.ress[0].W))) ) )
+        rhos = np.vstack( ( rhos, max(np.abs(np.linalg.eigvals(esn.ress[0].W))) ) )
+        
+        if new_MCs[i] > best_MCs[i]:
+          best_Ws[i], best_W_ins[i] = np.copy(esn.ress[i].W), np.copy(esn.ress[i].W_in)
 
     clear_output()
 
+  if not os.path.exists(f"results_deep/"):
+    os.makedirs(f"results_deep/")
+    
+  if not os.path.exists(f"models_deep/"):
+    os.makedirs(f"models_deep/")
+    
   data = {
     'test_MCs': test_MCs,
     'train_MCs': train_MCs,
@@ -350,7 +372,14 @@ def eval_one_reservoir_at_a_time(train_data, test_data, N = 5, Nr=100, Nu=1, rho
     string_train_fun = f'{train_fun}'.split(' ')[1]
     title = f'deep_one_at_time_max_epochs_{max_epochs}_{step}_{string_train_fun}_rdensity_{r_density}_idensity_{i_density}_Nr_{Nr}_Nu_{Nu}_mesInterval_{mesure_interval}_init_rho_{rho}_{now.strftime("%-d-%b-%H:%M:%S")}'
   with open(f'results_deep/{title}.pickle', 'wb') as handle:
-    pickle.dump(dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    
+  data_model = {
+    'best_Ws': best_Ws,
+    'best_W_ins': best_W_ins,
+  }
+  with open(f'models_deep/{title}.pickle', 'wb') as handle:
+    pickle.dump(data_model, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
   fig, (ax1, ax2, ax3) = plt.subplots(3, figsize=(10,9))
 
