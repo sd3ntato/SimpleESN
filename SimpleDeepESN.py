@@ -350,6 +350,7 @@ def eval_one_reservoir_at_a_time(train_data, test_data, N = 5, Nr=100, Nu=1, rho
         if new_MCs[i] > best_MCs[i]:
           best_Ws[i], best_W_ins[i] = np.copy(esn.ress[i].W), np.copy(esn.ress[i].W_in)
 
+    esn.ress[i].W ,esn.ress[i].W_in =  best_Ws[i] ,best_Ws[i]
     clear_output()
 
   if not os.path.exists(f"results_deep/"):
@@ -358,12 +359,6 @@ def eval_one_reservoir_at_a_time(train_data, test_data, N = 5, Nr=100, Nu=1, rho
   if not os.path.exists(f"models_deep/"):
     os.makedirs(f"models_deep/")
     
-  data = {
-    'test_MCs': test_MCs,
-    'train_MCs': train_MCs,
-    'test_dims': test_dims,
-    'train_dims': train_dims,
-  }
   title=''
   now = datetime.now()
   if type(step) == list:
@@ -371,9 +366,18 @@ def eval_one_reservoir_at_a_time(train_data, test_data, N = 5, Nr=100, Nu=1, rho
   else:
     string_train_fun = f'{train_fun}'.split(' ')[1]
     title = f'deep_one_at_time_max_epochs_{max_epochs}_{step}_{string_train_fun}_rdensity_{r_density}_idensity_{i_density}_Nr_{Nr}_Nu_{Nu}_mesInterval_{mesure_interval}_init_rho_{rho}_{now.strftime("%-d-%b-%H:%M:%S")}'
+  
+  # save results  
+  data = {
+    'test_MCs': test_MCs,
+    'train_MCs': train_MCs,
+    'test_dims': test_dims,
+    'train_dims': train_dims,
+  }
   with open(f'results_deep/{title}.pickle', 'wb') as handle:
     pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
     
+  # save model
   data_model = {
     'best_Ws': best_Ws,
     'best_W_ins': best_W_ins,
