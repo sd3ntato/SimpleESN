@@ -294,9 +294,9 @@ def glob_train_both(esn,train_seq,steps):
 
 ################################# ALLENAMENTO UN RESERVOIR ALLA VOLTA #################################
 
-def eval_one_reservoir_at_a_time(train_data, test_data, N = 5, Nr=100, Nu=1, rho=0.9, r_density=0.1, i_density=1, max_epochs=10, step=-2e-05 , train_fun=train_rec, mesure_interval=1):
+def eval_one_reservoir_at_a_time(train_data, test_data, N = 5, Nr=100, Nu=1, rho=0.9, r_density=0.1, i_density=1, max_epochs=10, step=-2e-05 , train_fun=train_rec, mesure_interval=1, targets=[0]):
   train_x = train_data[1000:5000]
-  train_y = np.vstack( list( train_data[1000-k:5000-k] for k in range(200) ) )
+  train_y = np.vstack( list( train_data[1000-k:5000-k] for k in range(2*Nr) ) )
 
   esn = DeepESN( N=N, Nr=Nr, Ny=2*Nr , rho=rho , r_density=r_density , i_density=i_density )
 
@@ -318,7 +318,7 @@ def eval_one_reservoir_at_a_time(train_data, test_data, N = 5, Nr=100, Nu=1, rho
 
   print(test_MCs)
 
-  for i in range( 1 ):
+  for i in targets:
     
     print('res:', i )
     for epch in range(max_epochs):
@@ -350,7 +350,7 @@ def eval_one_reservoir_at_a_time(train_data, test_data, N = 5, Nr=100, Nu=1, rho
         if new_MCs[i] > best_MCs[i]:
           best_Ws[i], best_W_ins[i] = np.copy(esn.ress[i].W), np.copy(esn.ress[i].W_in)
 
-    esn.ress[i].W ,esn.ress[i].W_in =  best_Ws[i] ,best_Ws[i]
+    esn.ress[i].W ,esn.ress[i].W_in =  best_Ws[i] ,best_W_ins[i]
     clear_output()
 
   if not os.path.exists(f"results_deep/"):
@@ -362,10 +362,10 @@ def eval_one_reservoir_at_a_time(train_data, test_data, N = 5, Nr=100, Nu=1, rho
   title=''
   now = datetime.now()
   if type(step) == list:
-    title = f'deep_one_at_time_max_epochs_{max_epochs}_{step[0]}_{step[1]}_rdensity_{r_density}_idensity_{i_density}_Nr_{Nr}_Nu_{Nu}_mesInterval_{mesure_interval}_init_rho_{rho}_{now.strftime("%-d-%b-%H:%M:%S")}'
+    title = f'deep_one_at_time_max_epochs_{max_epochs}_{step[0]}_{step[1]}_rdensity_{r_density}_idensity_{i_density}_Nr_{Nr}_Nu_{Nu}_mesInterval_{mesure_interval}_init_rho_{rho}_{now.strftime("%-d-%b-%H:%M:%S")}_targets_{targets}'
   else:
     string_train_fun = f'{train_fun}'.split(' ')[1]
-    title = f'deep_one_at_time_max_epochs_{max_epochs}_{step}_{string_train_fun}_rdensity_{r_density}_idensity_{i_density}_Nr_{Nr}_Nu_{Nu}_mesInterval_{mesure_interval}_init_rho_{rho}_{now.strftime("%-d-%b-%H:%M:%S")}'
+    title = f'deep_one_at_time_max_epochs_{max_epochs}_{step}_{string_train_fun}_rdensity_{r_density}_idensity_{i_density}_Nr_{Nr}_Nu_{Nu}_mesInterval_{mesure_interval}_init_rho_{rho}_{now.strftime("%-d-%b-%H:%M:%S")}_targets_{targets}'
   
   # save results  
   data = {
